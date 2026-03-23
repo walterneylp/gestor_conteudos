@@ -4,7 +4,9 @@
   --canvas: #f4f1eb;
   --surface: #fffdf8;
   --surface-strong: #f0e5d6;
+  --surface-contrast: #ffffff;
   --panel: #102a43;
+  --panel-soft: #163553;
   --ink: #132238;
   --ink-soft: #526173;
   --line: #dacdbf;
@@ -13,6 +15,29 @@
   --success: #1f7a62;
   --warning: #b57a16;
   --danger: #bf3b3b;
+  --shadow-color: rgba(16, 42, 67, 0.18);
+  --glow-a: rgba(183, 93, 42, 0.16);
+  --glow-b: rgba(16, 42, 67, 0.14);
+}
+
+:root[data-theme="dark"] {
+  --canvas: #08111d;
+  --surface: #101b29;
+  --surface-strong: #162435;
+  --surface-contrast: #1b2b3f;
+  --panel: #050b14;
+  --panel-soft: #0d1623;
+  --ink: #eef4ff;
+  --ink-soft: #93a7c0;
+  --line: #24354a;
+  --accent: #ff8f57;
+  --accent-strong: #ffb083;
+  --success: #68d3b7;
+  --warning: #ffcb72;
+  --danger: #ff8f8f;
+  --shadow-color: rgba(0, 0, 0, 0.48);
+  --glow-a: rgba(255, 143, 87, 0.12);
+  --glow-b: rgba(72, 102, 153, 0.18);
 }
 
 @theme inline {
@@ -33,11 +58,14 @@ html {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(183, 93, 42, 0.16), transparent 24%),
-    radial-gradient(circle at top right, rgba(16, 42, 67, 0.14), transparent 22%),
-    linear-gradient(180deg, #faf7f2 0%, var(--canvas) 100%);
+    radial-gradient(circle at top left, var(--glow-a), transparent 24%),
+    radial-gradient(circle at top right, var(--glow-b), transparent 22%),
+    linear-gradient(180deg, color-mix(in srgb, var(--canvas) 82%, white 18%) 0%, var(--canvas) 100%);
   color: var(--ink);
   font-family: var(--font-manrope), sans-serif;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
 }
 
 a {
@@ -72,4 +100,20 @@ textarea {
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.2;
+}
+
+.dashboard-shell {
+  position: relative;
+}
+
+.dashboard-shell::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), transparent 32%),
+    linear-gradient(225deg, rgba(255, 255, 255, 0.04), transparent 28%);
+  content: "";
+  pointer-events: none;
 }
