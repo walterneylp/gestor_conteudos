@@ -8,13 +8,17 @@ import type {
   ApprovalFlow,
   Approver,
   AuditLog,
+  ApiProvider,
   ContentJob,
   CreateJobInput,
   CreativeAsset,
   DashboardSummary,
   JobDetail,
+  LlmProviderKey,
   SourceRecord,
+  SettingsSnapshot,
   StoreData,
+  SearchProviderKey,
 } from "@/lib/types";
 
 const now = () => new Date().toISOString();
@@ -39,6 +43,99 @@ const defaultApprovers: Approver[] = [
     required: true,
     level: "final",
     active: true,
+  },
+];
+
+const defaultSearchProviders = (): ApiProvider[] => [
+  {
+    id: "api_search_brave",
+    domain: "search",
+    providerKey: "brave",
+    name: "Brave Search",
+    strategy: "primary",
+    enabled: true,
+    notes: "Pesquisa primaria configuravel para grounding.",
+    secretConfigured: false,
+    endpoint: "https://api.search.brave.com/res/v1/web/search",
+  },
+  {
+    id: "api_search_serper",
+    domain: "search",
+    providerKey: "serper",
+    name: "Serper",
+    strategy: "fallback",
+    enabled: true,
+    notes: "Fallback de busca para cobertura complementar.",
+    secretConfigured: false,
+    endpoint: "https://google.serper.dev/search",
+  },
+];
+
+const defaultLlmProviders = (): ApiProvider[] => [
+  {
+    id: "llm_openai",
+    domain: "text",
+    providerKey: "openai",
+    name: "OpenAI",
+    strategy: "primary",
+    enabled: true,
+    notes: "LLM configuravel para jobs editoriais.",
+    priority: 1,
+    availableModels: [],
+    secretConfigured: false,
+    endpoint: "https://api.openai.com/v1/models",
+  },
+  {
+    id: "llm_groq",
+    domain: "text",
+    providerKey: "groq",
+    name: "Groq",
+    strategy: "fallback",
+    enabled: true,
+    notes: "Fallback de baixa latencia.",
+    priority: 2,
+    availableModels: [],
+    secretConfigured: false,
+    endpoint: "https://api.groq.com/openai/v1/models",
+  },
+  {
+    id: "llm_openrouter",
+    domain: "text",
+    providerKey: "openrouter",
+    name: "OpenRouter",
+    strategy: "fallback",
+    enabled: true,
+    notes: "Agregador de modelos para experimentacao e custo.",
+    priority: 3,
+    availableModels: [],
+    secretConfigured: false,
+    endpoint: "https://openrouter.ai/api/v1/models",
+  },
+  {
+    id: "llm_anthropic",
+    domain: "text",
+    providerKey: "anthropic",
+    name: "Claude",
+    strategy: "fallback",
+    enabled: true,
+    notes: "Opcao de alta qualidade para escrita e analise.",
+    priority: 4,
+    availableModels: [],
+    secretConfigured: false,
+    endpoint: "https://api.anthropic.com/v1/models",
+  },
+  {
+    id: "llm_gemini",
+    domain: "text",
+    providerKey: "gemini",
+    name: "Gemini",
+    strategy: "fallback",
+    enabled: true,
+    notes: "Opcao Google para multimodal e grounding futuro.",
+    priority: 5,
+    availableModels: [],
+    secretConfigured: false,
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models",
   },
 ];
 
@@ -236,11 +333,10 @@ const createDemoStore = (): StoreData => {
       },
     ],
     apiProviders: [
-      { id: "api_search_1", domain: "search", name: "Brave Search", strategy: "primary", enabled: true, notes: "Pesquisa primaria" },
-      { id: "api_text_1", domain: "text", name: "LLM Editorial A", strategy: "primary", enabled: true, notes: "Geracao do artigo-mestre" },
-      { id: "api_text_2", domain: "text", name: "LLM Editorial B", strategy: "fallback", enabled: true, notes: "Fallback para adaptacoes" },
+      ...defaultSearchProviders(),
+      ...defaultLlmProviders(),
       { id: "api_image_1", domain: "image", name: "Image Provider", strategy: "cost_optimized", enabled: true, notes: "Criativos still image e carousel" },
-      { id: "api_delivery_1", domain: "delivery", name: "n8n Cloud", strategy: "primary", enabled: true, notes: "Entrega operacional" },
+      { id: "api_delivery_1", domain: "delivery", providerKey: "n8n", name: "n8n Cloud", strategy: "primary", enabled: true, notes: "Entrega operacional" },
     ],
     auditLogs,
     settings: {
@@ -255,6 +351,90 @@ const createDemoStore = (): StoreData => {
         slaHours: 24,
         defaultExpiryPolicy: "dashboard_review",
       },
+      searchRouting: {
+        primary: "brave",
+        fallback: "serper",
+      },
+    },
+  };
+};
+
+const withStoreDefaults = (store: StoreData): StoreData => {
+  const searchRouting = store.settings.searchRouting || {
+    primary: "brave",
+    fallback: "serper",
+  };
+  const hasSearchProviders = store.apiProviders.some((provider) => provider.domain === "search");
+  const hasRealLlmProviders = store.apiProviders.some(
+    (provider) =>
+      provider.domain === "text" &&
+      ["openai", "groq", "openrouter", "anthropic", "gemini"].includes(
+        String(provider.providerKey || ""),
+      ),
+  );
+  const baseProviders = [
+    ...(hasSearchProviders ? [] : defaultSearchProviders()),
+    ...(hasRealLlmProviders ? [] : defaultLlmProviders()),
+    ...store.apiProviders,
+  ];
+
+  const apiProviders = baseProviders.map((provider) => {
+    if (provider.domain === "search") {
+      const providerKey =
+        provider.providerKey ||
+        (provider.name.toLowerCase().includes("brave") ? "brave" : "serper");
+
+      return {
+        ...provider,
+        providerKey,
+        endpoint:
+          provider.endpoint ||
+          (providerKey === "brave"
+            ? "https://api.search.brave.com/res/v1/web/search"
+            : "https://google.serper.dev/search"),
+        secretConfigured: provider.secretConfigured ?? false,
+      };
+    }
+
+    if (provider.domain === "text") {
+      if (
+        !provider.providerKey &&
+        (provider.name === "LLM Editorial A" || provider.name === "LLM Editorial B")
+      ) {
+        return null;
+      }
+
+      const providerKey =
+        provider.providerKey ||
+        ({
+          "openai": "openai",
+          "groq": "groq",
+          "openrouter": "openrouter",
+          "claude": "anthropic",
+          "anthropic": "anthropic",
+          "gemini": "gemini",
+        }[
+          provider.name.toLowerCase().replace(/\s+/g, "")
+        ] as StoreData["apiProviders"][number]["providerKey"]);
+
+      return {
+        ...provider,
+        providerKey,
+        priority: provider.priority || 5,
+        availableModels: provider.availableModels || [],
+        secretConfigured: provider.secretConfigured ?? false,
+      };
+    }
+
+    return provider;
+  }).filter(Boolean) as ApiProvider[];
+
+  return {
+    ...store,
+    apiProviders,
+    settings: {
+      ...store.settings,
+      searchRouting,
     },
   };
 };
@@ -264,7 +444,9 @@ const ensureStore = async () => {
 
   try {
     const content = await readFile(STORE_PATH, "utf8");
-    return JSON.parse(content) as StoreData;
+    const parsed = withStoreDefaults(JSON.parse(content) as StoreData);
+    await writeFile(STORE_PATH, JSON.stringify(parsed, null, 2), "utf8");
+    return parsed;
   } catch {
     const seeded = createDemoStore();
     await writeFile(STORE_PATH, JSON.stringify(seeded, null, 2), "utf8");
@@ -354,16 +536,123 @@ export const listAuditLogs = async () => {
   return store.auditLogs.slice(0, 20);
 };
 
-export const getSettingsSnapshot = async () => {
+export const getSettingsSnapshot = async (): Promise<SettingsSnapshot> => {
   const store = await ensureStore();
+  const searchProviders = store.apiProviders.filter((provider) => provider.domain === "search");
+  const llmProviders = store.apiProviders
+    .filter((provider) => provider.domain === "text")
+    .sort((left, right) => (left.priority || 99) - (right.priority || 99));
 
   return {
     settings: store.settings,
     providers: store.apiProviders,
+    searchProviders,
+    llmProviders,
     endpoints: store.integrationEndpoints,
     approvers: store.approvers,
     databaseConfigured: isDatabaseConfigured(),
   };
+};
+
+export const updateSearchRouting = async ({
+  primary,
+  fallback,
+}: {
+  primary: SearchProviderKey;
+  fallback: SearchProviderKey;
+}) => {
+  const store = await ensureStore();
+
+  store.settings.searchRouting = { primary, fallback };
+  store.apiProviders = store.apiProviders.map((provider) => {
+    if (provider.domain !== "search") {
+      return provider;
+    }
+
+    if (provider.providerKey === primary) {
+      return { ...provider, strategy: "primary", enabled: true };
+    }
+
+    if (provider.providerKey === fallback) {
+      return { ...provider, strategy: "fallback", enabled: true };
+    }
+
+    return provider;
+  });
+
+  addAuditLog(
+    store,
+    "settings.search_routing.updated",
+    "settings-ui",
+    `Busca primaria: ${primary}. Fallback: ${fallback}.`,
+  );
+  await saveStore(store);
+};
+
+export const updateSearchProviderSecretState = async ({
+  providerKey,
+  secretConfigured,
+}: {
+  providerKey: SearchProviderKey;
+  secretConfigured: boolean;
+}) => {
+  const store = await ensureStore();
+
+  store.apiProviders = store.apiProviders.map((provider) =>
+    provider.domain === "search" && provider.providerKey === providerKey
+      ? { ...provider, secretConfigured }
+      : provider,
+  );
+
+  addAuditLog(
+    store,
+    "settings.search_provider.updated",
+    "settings-ui",
+    `Busca ${providerKey} marcada como ${secretConfigured ? "configurada" : "nao configurada"}.`,
+  );
+  await saveStore(store);
+};
+
+export const updateLlmProvider = async ({
+  providerKey,
+  enabled,
+  priority,
+  selectedModel,
+  availableModels,
+  secretConfigured,
+}: {
+  providerKey: LlmProviderKey;
+  enabled: boolean;
+  priority: number;
+  selectedModel?: string;
+  availableModels?: ApiProvider["availableModels"];
+  secretConfigured?: boolean;
+}) => {
+  const store = await ensureStore();
+
+  store.apiProviders = store.apiProviders.map((provider) => {
+    if (provider.domain !== "text" || provider.providerKey !== providerKey) {
+      return provider;
+    }
+
+    return {
+      ...provider,
+      enabled,
+      priority,
+      selectedModel,
+      availableModels: availableModels || provider.availableModels || [],
+      secretConfigured: secretConfigured ?? provider.secretConfigured,
+      discoveredAt: availableModels ? now() : provider.discoveredAt,
+    };
+  });
+
+  addAuditLog(
+    store,
+    "settings.llm_provider.updated",
+    "settings-ui",
+    `LLM ${providerKey} atualizada. prioridade=${priority}, enabled=${enabled}, modelo=${selectedModel || "n/a"}.`,
+  );
+  await saveStore(store);
 };
 
 export const createJob = async (input: CreateJobInput) => {

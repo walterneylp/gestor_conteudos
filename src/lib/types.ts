@@ -11,6 +11,13 @@ export type JobStatus =
 export type SocialChannel = "linkedin" | "instagram" | "x" | "facebook";
 export type VariantStatus = "draft" | "ready" | "approved";
 export type CreativeType = "image" | "carousel";
+export type SearchProviderKey = "brave" | "serper";
+export type LlmProviderKey =
+  | "openai"
+  | "groq"
+  | "openrouter"
+  | "anthropic"
+  | "gemini";
 export type ApprovalDecision =
   | "pending"
   | "approved"
@@ -125,10 +132,24 @@ export type IntegrationEndpoint = {
 export type ApiProvider = {
   id: string;
   domain: "search" | "text" | "image" | "delivery";
+  providerKey?: SearchProviderKey | LlmProviderKey | "n8n";
   name: string;
   strategy: "primary" | "fallback" | "cost_optimized";
   enabled: boolean;
   notes: string;
+  priority?: number;
+  selectedModel?: string;
+  availableModels?: ModelOption[];
+  secretConfigured?: boolean;
+  endpoint?: string;
+  discoveredAt?: string;
+};
+
+export type ModelOption = {
+  id: string;
+  label: string;
+  contextWindow?: number;
+  modalities?: string[];
 };
 
 export type AuditLog = {
@@ -151,6 +172,10 @@ export type WorkspaceSettings = {
   approval: {
     slaHours: number;
     defaultExpiryPolicy: ApprovalFlow["policyAfterExpiry"];
+  };
+  searchRouting: {
+    primary: SearchProviderKey;
+    fallback: SearchProviderKey;
   };
 };
 
@@ -201,4 +226,14 @@ export type CreateJobInput = {
   rawArticle?: string;
   sourceUrl?: string;
   selectedChannels: SocialChannel[];
+};
+
+export type SettingsSnapshot = {
+  settings: WorkspaceSettings;
+  providers: ApiProvider[];
+  searchProviders: ApiProvider[];
+  llmProviders: ApiProvider[];
+  endpoints: IntegrationEndpoint[];
+  approvers: Approver[];
+  databaseConfigured: boolean;
 };

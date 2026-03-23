@@ -65,10 +65,10 @@ export const AppShell = ({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-[20px] px-4 py-3 text-sm font-medium transition",
+                  "flex items-center gap-3 rounded-[20px] border px-4 py-3 text-sm font-medium transition",
                   active
-                    ? "bg-white text-[var(--panel)] shadow-[0_12px_34px_-20px_rgba(0,0,0,0.5)]"
-                    : "text-white/72 hover:bg-white/10 hover:text-white",
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-white shadow-[0_12px_34px_-20px_rgba(0,0,0,0.5)]"
+                    : "border-transparent text-white/72 hover:bg-white/10 hover:text-white",
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -124,6 +124,27 @@ export const AppShell = ({
                 n8n webhook ready
               </span>
             </div>
+          </div>
+
+          <div className="-mx-2 mt-4 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+            {primaryNavigation.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "shrink-0 rounded-full border px-3 py-2 text-sm font-medium transition",
+                    active
+                      ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                      : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink-soft)]",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </div>
         </header>
 

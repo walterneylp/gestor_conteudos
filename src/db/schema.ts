@@ -96,6 +96,21 @@ export const integrationEndpoints = pgTable("integration_endpoints", {
   retries: integer("retries").default(3).notNull(),
 });
 
+export const apiProviders = pgTable("api_providers", {
+  id: text("id").primaryKey(),
+  domain: text("domain").notNull(),
+  providerKey: text("provider_key"),
+  name: text("name").notNull(),
+  strategy: text("strategy").notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  priority: integer("priority"),
+  selectedModel: text("selected_model"),
+  availableModels: jsonb("available_models").$type<Array<{ id: string; label: string }>>(),
+  secretConfigured: boolean("secret_configured").default(false).notNull(),
+  endpoint: text("endpoint"),
+  notes: text("notes").notNull(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
   event: text("event").notNull(),

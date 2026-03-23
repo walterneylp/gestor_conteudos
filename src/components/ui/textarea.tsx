@@ -7,7 +7,7 @@ export const Textarea = ({
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
   <textarea
     className={cn(
-      "min-h-28 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] outline-none transition placeholder:text-[var(--ink-soft)] focus:border-[var(--accent)]",
+      "min-h-28 w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink)] outline-none transition placeholder:text-[var(--ink-soft)] focus:border-[var(--accent)]",
       className,
     )}
     {...props}
