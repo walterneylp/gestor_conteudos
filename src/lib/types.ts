@@ -236,4 +236,6 @@ export type SettingsSnapshot = {
   endpoints: IntegrationEndpoint[];
   approvers: Approver[];
   databaseConfigured: boolean;
+  supabasePublicConfigured: boolean;
+  supabaseUrl?: string;
 };

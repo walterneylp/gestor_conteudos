@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { buildCreativeDescriptions, buildMasterArticle, buildVariants } from "@/lib/content";
-import { env, isDatabaseConfigured } from "@/lib/env";
+import { env, isDatabaseConfigured, isSupabasePublicConfigured } from "@/lib/env";
 import { generateId, slugify } from "@/lib/utils";
 import type {
   ApprovalAction,
@@ -364,19 +364,23 @@ const withStoreDefaults = (store: StoreData): StoreData => {
     primary: "brave",
     fallback: "serper",
   };
-  const hasSearchProviders = store.apiProviders.some((provider) => provider.domain === "search");
-  const hasRealLlmProviders = store.apiProviders.some(
-    (provider) =>
-      provider.domain === "text" &&
-      ["openai", "groq", "openrouter", "anthropic", "gemini"].includes(
-        String(provider.providerKey || ""),
-      ),
+  const existingSearchProviderKeys = new Set(
+    store.apiProviders
+      .filter((provider) => provider.domain === "search")
+      .map((provider) => String(provider.providerKey || "").toLowerCase()),
   );
-  const baseProviders = [
-    ...(hasSearchProviders ? [] : defaultSearchProviders()),
-    ...(hasRealLlmProviders ? [] : defaultLlmProviders()),
-    ...store.apiProviders,
-  ];
+  const existingLlmProviderKeys = new Set(
+    store.apiProviders
+      .filter((provider) => provider.domain === "text")
+      .map((provider) => String(provider.providerKey || "").toLowerCase()),
+  );
+  const missingSearchProviders = defaultSearchProviders().filter(
+    (provider) => !existingSearchProviderKeys.has(String(provider.providerKey)),
+  );
+  const missingLlmProviders = defaultLlmProviders().filter(
+    (provider) => !existingLlmProviderKeys.has(String(provider.providerKey)),
+  );
+  const baseProviders = [...missingSearchProviders, ...missingLlmProviders, ...store.apiProviders];
 
   const apiProviders = baseProviders.map((provider) => {
     if (provider.domain === "search") {
@@ -551,6 +555,8 @@ export const getSettingsSnapshot = async (): Promise<SettingsSnapshot> => {
     endpoints: store.integrationEndpoints,
     approvers: store.approvers,
     databaseConfigured: isDatabaseConfigured(),
+    supabasePublicConfigured: isSupabasePublicConfigured(),
+    supabaseUrl: env.supabaseUrl,
   };
 };
 

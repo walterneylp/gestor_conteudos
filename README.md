@@ -43,6 +43,8 @@ cp .env.example .env.local
 Campos relevantes:
 
 - `DATABASE_URL`: conexao Postgres do Supabase
+- `NEXT_PUBLIC_SUPABASE_URL`: URL publica do projeto Supabase
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: chave publica anon para consumo client-side
 - `N8N_OUTBOUND_SECRET`: segredo para assinar payloads enviados ao n8n
 - `N8N_INBOUND_SECRET`: segredo para validar callbacks de aprovacao
 - `EXTERNAL_WEBHOOK_SECRET`: segredo para webhooks externos

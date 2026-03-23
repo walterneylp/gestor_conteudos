@@ -51,7 +51,11 @@ export default async function SettingsPage() {
               <div>
                 <p className="text-sm font-semibold">Modo de dados</p>
                 <p className="text-sm text-[var(--ink-soft)]">
-                  {snapshot.databaseConfigured ? "Supabase" : "Local fallback"}
+                  {snapshot.supabasePublicConfigured
+                    ? "Supabase API publica"
+                    : snapshot.databaseConfigured
+                      ? "Supabase/Postgres"
+                      : "Local fallback"}
                 </p>
               </div>
             </div>
@@ -86,9 +90,19 @@ export default async function SettingsPage() {
               </p>
             </div>
             <div className="rounded-[24px] bg-[var(--surface-contrast)] p-4">
+              <p className="text-sm font-semibold">Conexao publica</p>
+              <p className="mt-3 break-all text-sm leading-7 text-[var(--ink-soft)]">
+                {snapshot.supabasePublicConfigured
+                  ? snapshot.supabaseUrl
+                  : "NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY ainda nao configurados"}
+              </p>
+            </div>
+            <div className="rounded-[24px] bg-[var(--surface-contrast)] p-4">
               <p className="text-sm font-semibold">Destino do banco</p>
               <p className="mt-3 text-sm leading-7 text-[var(--ink-soft)]">
-                {snapshot.databaseConfigured ? "Supabase/Postgres configurado" : "Modo local aguardando DATABASE_URL"}
+                {snapshot.databaseConfigured
+                  ? "Supabase/Postgres configurado"
+                  : "Persistencia real ainda aguardando DATABASE_URL do Postgres do Supabase"}
               </p>
             </div>
           </div>
