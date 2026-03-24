@@ -213,6 +213,20 @@ export type DashboardSummary = {
   jobsByStatus: Array<{ label: string; value: number }>;
 };
 
+export type InfrastructureSnapshot = {
+  persistenceMode: "supabase" | "postgres" | "local";
+  supabase: {
+    configured: boolean;
+    connected: boolean;
+    url?: string;
+    remoteJobCount?: number;
+    lastSyncState: "ok" | "fallback";
+  };
+  postgres: {
+    configured: boolean;
+  };
+};
+
 export type CreateJobInput = {
   origin: JobOrigin;
   title: string;

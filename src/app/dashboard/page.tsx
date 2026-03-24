@@ -1,17 +1,27 @@
 import Link from "next/link";
-import { ArrowRight, CircleDashed, Compass, DatabaseZap, Orbit, Radar, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  CircleDashed,
+  Compass,
+  DatabaseZap,
+  Orbit,
+  Radar,
+  Sparkles,
+  Waypoints,
+} from "lucide-react";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getDashboardSummary, listAuditLogs, listJobs } from "@/lib/store";
+import { getDashboardSummary, getInfrastructureSnapshot, listAuditLogs, listJobs } from "@/lib/store";
 import { formatRelativeDate } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [summary, jobs, auditLogs] = await Promise.all([
+  const [summary, jobs, auditLogs, infrastructure] = await Promise.all([
     getDashboardSummary(),
     listJobs(),
     listAuditLogs(),
+    getInfrastructureSnapshot(),
   ]);
 
   return (
@@ -53,11 +63,19 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-white/68">Storage local</span>
-                    <Badge color="accent">provisório</Badge>
+                    <Badge color={infrastructure.persistenceMode === "local" ? "accent" : "neutral"}>
+                      {infrastructure.persistenceMode === "local" ? "ativo" : "fallback"}
+                    </Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-white/68">Supabase</span>
-                    <Badge color="warning">aguardando</Badge>
+                    <Badge color={infrastructure.supabase.connected ? "success" : infrastructure.supabase.configured ? "accent" : "warning"}>
+                      {infrastructure.supabase.connected
+                        ? "remoto ativo"
+                        : infrastructure.supabase.configured
+                          ? "configurado"
+                          : "aguardando"}
+                    </Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-white/68">n8n</span>
@@ -69,7 +87,13 @@ export default async function DashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-[24px] border border-white/10 bg-white/8 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-white/50">Modo</p>
-                  <p className="mt-3 font-mono text-lg text-white">Local-first</p>
+                  <p className="mt-3 font-mono text-lg text-white">
+                    {infrastructure.persistenceMode === "supabase"
+                      ? "Supabase-js"
+                      : infrastructure.persistenceMode === "postgres"
+                        ? "Postgres"
+                        : "Local-first"}
+                  </p>
                 </div>
                 <div className="rounded-[24px] border border-white/10 bg-white/8 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-white/50">Entrega</p>
@@ -92,7 +116,12 @@ export default async function DashboardPage() {
             {[
               {
                 title: "Persistência",
-                text: "Modo arquivo local ativo. Schema Drizzle pronto para Supabase/Postgres.",
+                text:
+                  infrastructure.persistenceMode === "supabase"
+                    ? `Supabase remoto ativo via supabase-js com ${infrastructure.supabase.remoteJobCount || 0} job(s) no payload sincronizado.`
+                    : infrastructure.persistenceMode === "postgres"
+                      ? "Postgres configurado. A camada híbrida já está pronta para operação SQL direta."
+                      : "Modo arquivo local ativo. Supabase permanece como destino remoto/fallback operacional.",
                 icon: DatabaseZap,
               },
               {
@@ -178,11 +207,11 @@ export default async function DashboardPage() {
         </Card>
 
         <div className="grid gap-4">
-          <Card className="space-y-4 rounded-[32px]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="eyebrow text-[var(--ink-soft)]">Radar de execução</p>
-                <h2 className="mt-2 text-xl font-semibold">Leitura instantânea</h2>
+        <Card className="space-y-4 rounded-[32px]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="eyebrow text-[var(--ink-soft)]">Radar de execução</p>
+              <h2 className="mt-2 text-xl font-semibold">Leitura instantânea</h2>
               </div>
               <CircleDashed className="h-5 w-5 text-[var(--accent)]" />
             </div>
@@ -201,6 +230,55 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </Card>
+
+          <Card className="space-y-4 rounded-[32px]">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="eyebrow text-[var(--ink-soft)]">Backend</p>
+                <h2 className="mt-2 text-xl font-semibold">Monitoramento do Supabase</h2>
+              </div>
+              <Waypoints className="h-5 w-5 text-[var(--accent)]" />
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-[24px] bg-[var(--surface-strong)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Canal remoto</p>
+                  <Badge color={infrastructure.supabase.connected ? "success" : infrastructure.supabase.configured ? "accent" : "warning"}>
+                    {infrastructure.supabase.connected
+                      ? "sincronizando"
+                      : infrastructure.supabase.configured
+                        ? "configurado"
+                        : "desligado"}
+                  </Badge>
+                </div>
+                <p className="mt-3 break-all text-sm leading-6 text-[var(--ink-soft)]">
+                  {infrastructure.supabase.url || "NEXT_PUBLIC_SUPABASE_URL nao configurada"}
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-[var(--line)] bg-[var(--surface-contrast)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Payload remoto</p>
+                  <span className="font-mono text-lg">
+                    {infrastructure.supabase.remoteJobCount ?? 0}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
+                  Jobs detectados no estado persistido pelo `workspace_state`.
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-[var(--line)] bg-[var(--surface-contrast)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Fallback local</p>
+                  <Badge color={infrastructure.supabase.lastSyncState === "ok" ? "neutral" : "warning"}>
+                    {infrastructure.supabase.lastSyncState === "ok" ? "standby" : "ativo"}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
+                  O arquivo local segue disponível se a API remota falhar ou ficar indisponível.
+                </p>
+              </div>
             </div>
           </Card>
 
@@ -239,7 +317,7 @@ export default async function DashboardPage() {
                 "Tema claro/escuro persistido no navegador",
                 "Dashboard reestruturado em leitura executiva + operacional",
                 "Rodapé lateral com versão e timestamp do build",
-                "Base pronta para conectar Supabase sem refazer UI",
+                "Supabase remoto monitorado diretamente no dashboard",
               ].map((item) => (
                 <div key={item} className="rounded-[24px] border border-[var(--line)] bg-[var(--surface-contrast)] px-4 py-3 text-sm leading-6 text-[var(--ink-soft)]">
                   {item}
@@ -261,7 +339,7 @@ export default async function DashboardPage() {
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             {[
-              "Virar persistência para Supabase real",
+              "Substituir estado único por tabelas remotas normalizadas",
               "Enviar payloads reais para n8n",
               "Substituir mock de geração por providers configuráveis",
             ].map((item) => (

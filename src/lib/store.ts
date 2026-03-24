@@ -31,6 +31,7 @@ import type {
   CreateJobInput,
   CreativeAsset,
   DashboardSummary,
+  InfrastructureSnapshot,
   JobDetail,
   LlmProviderKey,
   SourceRecord,
@@ -666,6 +667,30 @@ export const getDashboardSummary = async (): Promise<DashboardSummary> => {
       { label: "Aprovados", value: count("approved") },
       { label: "Falhas", value: count("failed") },
     ],
+  };
+};
+
+export const getInfrastructureSnapshot = async (): Promise<InfrastructureSnapshot> => {
+  const supabaseConfigured = isSupabasePublicConfigured();
+  const postgresConfigured = isDatabaseConfigured();
+  const supabaseStore = supabaseConfigured ? await readSupabaseStore() : undefined;
+
+  return {
+    persistenceMode: supabaseStore
+      ? "supabase"
+      : postgresConfigured
+        ? "postgres"
+        : "local",
+    supabase: {
+      configured: supabaseConfigured,
+      connected: Boolean(supabaseStore),
+      url: env.supabaseUrl,
+      remoteJobCount: supabaseStore?.jobs.length,
+      lastSyncState: supabaseStore ? "ok" : "fallback",
+    },
+    postgres: {
+      configured: postgresConfigured,
+    },
   };
 };
 
