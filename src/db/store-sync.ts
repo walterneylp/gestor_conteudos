@@ -18,7 +18,7 @@ import {
 } from "@/db/schema";
 import type { StoreData } from "@/lib/types";
 
-const WORKSPACE_ID = "workspace_default";
+export const WORKSPACE_ID = "workspace_default";
 
 type Db = PostgresJsDatabase<Record<string, never>> & {
   $client?: ReturnType<typeof postgres>;

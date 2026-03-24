@@ -1,5 +1,22 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
+import { eq } from "drizzle-orm";
+import {
+  apiProviders as apiProvidersTable,
+  approvalActions as approvalActionsTable,
+  approvalFlows as approvalFlowsTable,
+  approvers as approversTable,
+  auditLogs as auditLogsTable,
+  contentJobs,
+  creativeAssets as creativeAssetsTable,
+  integrationEndpoints as integrationEndpointsTable,
+  masterArticles as masterArticlesTable,
+  socialVariants as socialVariantsTable,
+  sources as sourcesTable,
+  workspaceSettings,
+} from "@/db/schema";
+import { getDb } from "@/db/client";
+import { syncStoreDataToDatabase, WORKSPACE_ID } from "@/db/store-sync";
 import { buildCreativeDescriptions, buildMasterArticle, buildVariants } from "@/lib/content";
 import { env, isDatabaseConfigured, isSupabasePublicConfigured } from "@/lib/env";
 import { generateId, slugify } from "@/lib/utils";
@@ -24,6 +41,7 @@ import type {
 const now = () => new Date().toISOString();
 const dayFromNow = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 const STORE_PATH = path.join(process.cwd(), ".data", "store.json");
+const toIsoString = (value: string | Date) => new Date(value).toISOString();
 
 const defaultApprovers: Approver[] = [
   {
@@ -306,7 +324,10 @@ const createDemoStore = (): StoreData => {
     sources,
     masterArticles,
     socialVariants,
-    creativeAssets,
+    creativeAssets: creativeAssets.map((asset) => ({
+      ...asset,
+      status: asset.status as CreativeAsset["status"],
+    })),
     approvers: defaultApprovers,
     approvalFlows,
     approvalActions,
@@ -443,7 +464,7 @@ const withStoreDefaults = (store: StoreData): StoreData => {
   };
 };
 
-const ensureStore = async () => {
+const readLocalStore = async () => {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
 
   try {
@@ -458,9 +479,136 @@ const ensureStore = async () => {
   }
 };
 
+const loadDatabaseStore = async (): Promise<StoreData | undefined> => {
+  const db = getDb();
+
+  if (!db) {
+    return undefined;
+  }
+
+  const [settingsRow] = await db
+    .select()
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, WORKSPACE_ID));
+
+  if (!settingsRow) {
+    return undefined;
+  }
+
+  const jobs = await db.select().from(contentJobs);
+  const sources = await db.select().from(sourcesTable);
+  const masterArticles = await db.select().from(masterArticlesTable);
+  const socialVariants = await db.select().from(socialVariantsTable);
+  const creativeAssets = await db.select().from(creativeAssetsTable);
+  const approvers = await db.select().from(approversTable);
+  const approvalFlows = await db.select().from(approvalFlowsTable);
+  const approvalActions = await db.select().from(approvalActionsTable);
+  const integrationEndpoints = await db.select().from(integrationEndpointsTable);
+  const apiProviders = await db.select().from(apiProvidersTable);
+  const auditLogs = await db.select().from(auditLogsTable);
+
+  return withStoreDefaults({
+    jobs: jobs.map((job) => ({
+      ...job,
+      selectedChannels: job.selectedChannels as ContentJob["selectedChannels"],
+      dueAt: toIsoString(job.dueAt),
+      createdAt: toIsoString(job.createdAt),
+      updatedAt: toIsoString(job.updatedAt),
+    })),
+    sources: sources.map((source) => ({
+      ...source,
+      references: source.references as SourceRecord["references"],
+    })),
+    masterArticles: masterArticles.map((article) => ({
+      ...article,
+      references: article.references as string[],
+    })),
+    socialVariants: socialVariants.map((variant) => ({
+      ...variant,
+      hashtags: variant.hashtags as string[],
+    })),
+    creativeAssets: creativeAssets.map((asset) => ({
+      ...asset,
+      status: asset.status as CreativeAsset["status"],
+    })),
+    approvers,
+    approvalFlows: approvalFlows.map((flow) => ({
+      ...flow,
+      expiresAt: toIsoString(flow.expiresAt),
+    })),
+    approvalActions: approvalActions.map((action) => ({
+      ...action,
+      createdAt: toIsoString(action.createdAt),
+    })),
+    integrationEndpoints: integrationEndpoints.map((endpoint) => ({
+      id: endpoint.id,
+      kind: endpoint.kind as StoreData["integrationEndpoints"][number]["kind"],
+      name: endpoint.name,
+      url: endpoint.url,
+      enabled: endpoint.enabled,
+      timeoutMs: endpoint.timeoutMs,
+      retries: endpoint.retries,
+      secretConfigured: endpoint.secretConfigured,
+    })),
+    apiProviders: apiProviders.map((provider) => ({
+      id: provider.id,
+      domain: provider.domain as ApiProvider["domain"],
+      providerKey: (provider.providerKey || undefined) as ApiProvider["providerKey"],
+      name: provider.name,
+      strategy: provider.strategy as ApiProvider["strategy"],
+      enabled: provider.enabled,
+      priority: provider.priority || undefined,
+      selectedModel: provider.selectedModel || undefined,
+      availableModels: provider.availableModels as ApiProvider["availableModels"],
+      secretConfigured: provider.secretConfigured,
+      endpoint: provider.endpoint || undefined,
+      notes: provider.notes,
+      discoveredAt: provider.discoveredAt ? toIsoString(provider.discoveredAt) : undefined,
+    })),
+    auditLogs: auditLogs.map((log) => ({
+      id: log.id,
+      event: log.event,
+      jobId: log.jobId || undefined,
+      actor: log.actor,
+      details: log.details,
+      createdAt: toIsoString(log.createdAt),
+    })),
+    settings: {
+      workspaceName: settingsRow.workspaceName,
+      branding: settingsRow.branding,
+      approval: settingsRow.approval,
+      searchRouting: settingsRow.searchRouting as StoreData["settings"]["searchRouting"],
+    },
+  });
+};
+
+const ensureStore = async () => {
+  const db = getDb();
+
+  if (db) {
+    const databaseStore = await loadDatabaseStore();
+
+    if (databaseStore) {
+      return databaseStore;
+    }
+
+    const localStore = await readLocalStore();
+    await syncStoreDataToDatabase(db, localStore);
+    return localStore;
+  }
+
+  return readLocalStore();
+};
+
 const saveStore = async (store: StoreData) => {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+
+  const db = getDb();
+
+  if (db) {
+    await syncStoreDataToDatabase(db, store);
+  }
 };
 
 const addAuditLog = (store: StoreData, event: string, actor: string, details: string, jobId?: string) => {
