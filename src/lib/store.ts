@@ -19,6 +19,7 @@ import { getDb } from "@/db/client";
 import { syncStoreDataToDatabase, WORKSPACE_ID } from "@/db/store-sync";
 import { buildCreativeDescriptions, buildMasterArticle, buildVariants } from "@/lib/content";
 import { env, isDatabaseConfigured, isSupabasePublicConfigured } from "@/lib/env";
+import { readSupabaseStore, writeSupabaseStore } from "@/lib/supabase/store";
 import { generateId, slugify } from "@/lib/utils";
 import type {
   ApprovalAction,
@@ -583,6 +584,14 @@ const loadDatabaseStore = async (): Promise<StoreData | undefined> => {
 };
 
 const ensureStore = async () => {
+  if (isSupabasePublicConfigured()) {
+    const supabaseStore = await readSupabaseStore();
+
+    if (supabaseStore) {
+      return withStoreDefaults(supabaseStore);
+    }
+  }
+
   const db = getDb();
 
   if (db) {
@@ -594,15 +603,30 @@ const ensureStore = async () => {
 
     const localStore = await readLocalStore();
     await syncStoreDataToDatabase(db, localStore);
+
+    if (isSupabasePublicConfigured()) {
+      await writeSupabaseStore(localStore);
+    }
+
     return localStore;
   }
 
-  return readLocalStore();
+  const localStore = await readLocalStore();
+
+  if (isSupabasePublicConfigured()) {
+    await writeSupabaseStore(localStore);
+  }
+
+  return localStore;
 };
 
 const saveStore = async (store: StoreData) => {
   await mkdir(path.dirname(STORE_PATH), { recursive: true });
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+
+  if (isSupabasePublicConfigured()) {
+    await writeSupabaseStore(store);
+  }
 
   const db = getDb();
 
